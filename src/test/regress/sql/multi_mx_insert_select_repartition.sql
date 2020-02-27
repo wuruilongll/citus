@@ -36,7 +36,7 @@ TRUNCATE target_table;
 --
 -- Test repartitioned INSERT/SELECT from MX worker
 --
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO multi_mx_insert_select_repartition;
 EXPLAIN (costs off) INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
@@ -56,7 +56,7 @@ BEGIN;
     insert into target_table SELECT a FROM source_table LIMIT 10;
 ROLLBACK;
 
-\c - - - :master_port
+\c - - :master_host :master_port
 SET search_path TO multi_mx_insert_select_repartition;
 SELECT * FROM target_table ORDER BY a;
 

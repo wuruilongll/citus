@@ -111,3 +111,6 @@ s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_contai
 
 s/:'worker_2_host'/'localhost'/g
 s/:'worker_1_host'/'localhost'/g
+s/:public_worker_1_host/-/g
+s/:public_worker_2_host/-/g
+s/:master_host/-/g
