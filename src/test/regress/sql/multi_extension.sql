@@ -201,7 +201,7 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus;
 
 -- test cache invalidation in workers
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';
@@ -213,7 +213,7 @@ ALTER EXTENSION citus UPDATE;
 -- if cache is invalidated succesfull, this \d should work without any problem
 \d
 
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- check that maintenance daemon gets (re-)started for the right user
 DROP EXTENSION citus;
@@ -309,20 +309,20 @@ DROP SCHEMA test_deamon CASCADE;
 
 -- create a test database, configure citus with single node
 CREATE DATABASE another;
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE DATABASE another;
-\c - - - :master_port
+\c - - :master_host :master_port
 
 \c another
 CREATE EXTENSION citus;
 SELECT FROM master_add_node(:'worker_1_host', :worker_1_port);
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE EXTENSION citus;
 ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
 RENAME TO dummy_assign_function;
 
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.shard_replication_factor to 1;
 -- create_distributed_table command should fail
 CREATE TABLE t1(a int, b int);
@@ -338,8 +338,8 @@ END;
 $$;
 
 \c regression
-\c - - - :master_port
+\c - - :master_host :master_port
 DROP DATABASE another;
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 DROP DATABASE another;

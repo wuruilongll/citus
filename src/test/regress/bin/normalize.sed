@@ -97,3 +97,6 @@ s/repartitioned_results_[0-9]+/repartitioned_results_xxxxx/g
 
 s/:'worker_2_host'/'localhost'/g
 s/:'worker_1_host'/'localhost'/g
+s/:public_worker_1_host/-/g
+s/:public_worker_2_host/-/g
+s/:master_host/-/g
