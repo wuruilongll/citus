@@ -332,7 +332,7 @@ CREATE DATABASE another;
 
 \c another
 CREATE EXTENSION citus;
-SELECT FROM master_add_node('localhost', :worker_1_port);
+SELECT FROM master_add_node(:'worker_1_host', :worker_1_port);
 
 \c - - - :worker_1_port
 CREATE EXTENSION citus;
