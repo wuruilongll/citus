@@ -1,5 +1,6 @@
 -- File to create functions and helpers needed for subsequent tests
-
+-- Some of the tests fail but without them some other tests fail. So failing parts
+-- are removed to create shadow tests. This is one of them.
 -- create a helper function to create objects on each node
 CREATE OR REPLACE FUNCTION run_command_on_master_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -7,7 +8,6 @@ BEGIN
      EXECUTE p_sql;
      PERFORM run_command_on_workers(p_sql);
 END;$$;
-
 -- Create a function to make sure that queries returning the same result
 CREATE OR REPLACE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
 BEGIN
@@ -18,7 +18,6 @@ BEGIN
 	END IF;
 END;
 $$LANGUAGE plpgsql;
-
 -- Create a function to ignore worker plans in explain output
 CREATE OR REPLACE FUNCTION coordinator_plan(explain_commmand text, out query_plan text)
 RETURNS SETOF TEXT AS $$
@@ -32,7 +31,6 @@ BEGIN
   END LOOP;
   RETURN;
 END; $$ language plpgsql;
-
 -- Is a distributed plan?
 CREATE OR REPLACE FUNCTION plan_is_distributed(explain_commmand text)
 RETURNS BOOLEAN AS $$
@@ -47,7 +45,6 @@ BEGIN
   END LOOP;
   RETURN FALSE;
 END; $$ language plpgsql;
-
 -- helper function to quickly run SQL on the whole cluster
 CREATE OR REPLACE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -55,7 +52,6 @@ BEGIN
      EXECUTE p_sql;
      PERFORM run_command_on_workers(p_sql);
 END;$$;
-
 -- 1. Marks the given procedure as colocated with the given table.
 -- 2. Marks the argument index with which we route the procedure.
 CREATE OR REPLACE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
@@ -66,7 +62,6 @@ BEGIN
     from pg_proc, pg_dist_partition
     where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
 END;$$;
-
 -- helper function to verify the function of a coordinator is the same on all workers
 CREATE OR REPLACE FUNCTION verify_function_is_same_on_workers(funcname text)
     RETURNS bool
@@ -87,7 +82,6 @@ BEGIN
     RETURN true;
 END;
 $func$;
-
 --
 -- Procedure for creating shards for range partitioned distributed table.
 --
