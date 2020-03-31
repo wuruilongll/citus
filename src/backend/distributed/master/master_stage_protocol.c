@@ -559,9 +559,10 @@ static List *
 RelationShardListForShardCreate(ShardInterval *shardInterval)
 {
 	Oid relationId = shardInterval->relationId;
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
-	List *referencingRelationList = cacheEntry->referencingRelationsViaForeignKey;
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+	List *referencedRelationList = cacheRef->cacheEntry->referencedRelationsViaForeignKey;
+	List *referencingRelationList =
+		cacheRef->cacheEntry->referencingRelationsViaForeignKey;
 	int shardIndex = -1;
 
 	/* list_concat_*() modifies the first arg, so make a copy first */
@@ -575,8 +576,8 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	relationShard->shardId = shardInterval->shardId;
 	List *relationShardList = list_make1(relationShard);
 
-	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
-		cacheEntry->colocationId != INVALID_COLOCATION_ID)
+	if (cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+		cacheRef->cacheEntry->colocationId != INVALID_COLOCATION_ID)
 	{
 		shardIndex = ShardIndex(shardInterval);
 	}
@@ -598,11 +599,12 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 		{
 			fkeyShardId = GetFirstShardId(fkeyRelationid);
 		}
-		else if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+		else if (cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
 				 PartitionMethod(fkeyRelationid) == DISTRIBUTE_BY_HASH)
 		{
 			/* hash distributed tables should be colocated to have fkey */
-			Assert(TableColocationId(fkeyRelationid) == cacheEntry->colocationId);
+			Assert(TableColocationId(fkeyRelationid) ==
+				   cacheRef->cacheEntry->colocationId);
 
 			fkeyShardId =
 				ColocatedShardIdInRelation(fkeyRelationid, shardIndex);
@@ -625,6 +627,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 		relationShardList = lappend(relationShardList, fkeyRelationShard);
 	}
 
+	ReleaseTableCacheEntry(cacheRef);
 
 	/* if partitioned table, make sure to record the parent table */
 	if (PartitionTable(relationId))

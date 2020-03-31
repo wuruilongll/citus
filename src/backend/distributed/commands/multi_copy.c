@@ -2089,8 +2089,8 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(tableId);
-	partitionMethod = cacheEntry->partitionMethod;
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(tableId);
+	partitionMethod = cacheRef->cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
@@ -2119,7 +2119,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* error if any shard missing min/max values */
 	if (partitionMethod != DISTRIBUTE_BY_NONE &&
-		cacheEntry->hasUninitializedShardInterval)
+		cacheRef->cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("could not start copy"),
@@ -2137,9 +2137,12 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	 */
 	SerializeNonCommutativeWrites(shardIntervalList, RowExclusiveLock);
 
+	/* keep the table metadata to avoid looking it up for every tuple */
+	copyDest->tableMetadataRef = cacheRef;
+
 	UseCoordinatedTransaction();
 
-	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
+	if (cacheRef->cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
 		MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
 		CoordinatedTransactionUse2PC();
@@ -2483,9 +2486,9 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	 * For reference table, this function blindly returns the tables single
 	 * shard.
 	 */
-	CitusTableCacheEntry *cacheEntry =
-		GetCitusTableCacheEntry(copyDest->distributedRelationId);
-	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue, cacheEntry);
+	ShardInterval *shardInterval =
+		FindShardInterval(partitionColumnValue,
+						  copyDest->tableMetadataRef->cacheEntry);
 	if (shardInterval == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2513,6 +2516,13 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 
 	List *connectionStateList = ConnectionStateList(connectionStateHash);
 	FinishLocalCopy(copyDest);
+
+	CitusTableCacheEntryRef *tableMetadataRef = copyDest->tableMetadataRef;
+	if (tableMetadataRef)
+	{
+		copyDest->tableMetadataRef = NULL;
+		ReleaseTableCacheEntry(tableMetadataRef);
+	}
 
 	PG_TRY();
 	{
@@ -2627,6 +2637,11 @@ CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 	if (copyDest->connectionStateHash)
 	{
 		hash_destroy(copyDest->connectionStateHash);
+	}
+
+	if (copyDest->tableMetadataRef)
+	{
+		ReleaseTableCacheEntry(copyDest->tableMetadataRef);
 	}
 
 	pfree(copyDest);

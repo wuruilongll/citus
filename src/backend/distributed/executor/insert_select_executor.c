@@ -210,11 +210,12 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 							 distSelectJob->jobId);
 			char *distResultPrefix = distResultPrefixString->data;
 
-			CitusTableCacheEntry *targetRelation =
+			CitusTableCacheEntryRef *targetRelation =
 				GetCitusTableCacheEntry(targetRelationId);
 
 			int partitionColumnIndex =
-				PartitionColumnIndex(insertTargetList, targetRelation->partitionColumn);
+				PartitionColumnIndex(insertTargetList,
+									 targetRelation->cacheEntry->partitionColumn);
 			if (partitionColumnIndex == -1)
 			{
 				char *relationName = get_rel_name(targetRelationId);
@@ -254,7 +255,8 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			List **redistributedResults = RedistributeTaskListResults(distResultPrefix,
 																	  distSelectTaskList,
 																	  partitionColumnIndex,
-																	  targetRelation,
+																	  targetRelation->
+																	  cacheEntry,
 																	  binaryFormat);
 
 			/*
@@ -264,9 +266,10 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			 * INSERT INTO ... SELECT * FROM read_intermediate_results(...);
 			 */
 			List *taskList = RedistributedInsertSelectTaskList(insertSelectQuery,
-															   targetRelation,
+															   targetRelation->cacheEntry,
 															   redistributedResults,
 															   binaryFormat);
+			ReleaseTableCacheEntry(targetRelation);
 
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
@@ -474,15 +477,15 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
 
-	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
-	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+	CitusTableCacheEntryRef *targetCacheRef = GetCitusTableCacheEntry(targetRelationId);
+	int shardCount = targetCacheRef->cacheEntry->shardIntervalArrayLength;
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
 
 	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
 		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
+			targetCacheRef->cacheEntry->sortedShardIntervalArray[shardOffset];
 		uint64 shardId = targetShardInterval->shardId;
 		List *columnAliasList = NIL;
 		StringInfo queryString = makeStringInfo();
@@ -531,13 +534,14 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 		modifyTask->anchorShardId = shardId;
 		modifyTask->taskPlacementList = insertShardPlacementList;
 		modifyTask->relationShardList = list_make1(relationShard);
-		modifyTask->replicationModel = targetCacheEntry->replicationModel;
+		modifyTask->replicationModel = targetCacheRef->cacheEntry->replicationModel;
 
 		taskList = lappend(taskList, modifyTask);
 
 		taskIdIndex++;
 	}
 
+	ReleaseTableCacheEntry(targetCacheRef);
 	return taskList;
 }
 
@@ -885,11 +889,13 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 bool
 IsSupportedRedistributionTarget(Oid targetRelationId)
 {
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
+	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(targetRelationId);
+	char partitionMethod = tableRef->cacheEntry->partitionMethod;
+	ReleaseTableCacheEntry(tableRef);
 
 	/* only range and hash-distributed tables are currently supported */
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_HASH &&
-		tableEntry->partitionMethod != DISTRIBUTE_BY_RANGE)
+	if (partitionMethod != DISTRIBUTE_BY_HASH &&
+		partitionMethod != DISTRIBUTE_BY_RANGE)
 	{
 		return false;
 	}

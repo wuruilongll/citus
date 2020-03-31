@@ -220,8 +220,8 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
-	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
-	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+	CitusTableCacheEntryRef *targetCacheRef = GetCitusTableCacheEntry(targetRelationId);
+	int shardCount = targetCacheRef->cacheEntry->shardIntervalArrayLength;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
@@ -256,7 +256,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
 		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
+			targetCacheRef->cacheEntry->sortedShardIntervalArray[shardOffset];
 
 		Task *modifyTask = RouterModifyTaskForShardInterval(originalQuery,
 															targetShardInterval,
@@ -428,7 +428,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
+	char replicationModel = cacheRef->cacheEntry->replicationModel;
+	ReleaseTableCacheEntry(cacheRef);
 
 	PlannerRestrictionContext *copyOfPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));
@@ -584,7 +586,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->relationShardList = relationShardList;
-	modifyTask->replicationModel = cacheEntry->replicationModel;
+	modifyTask->replicationModel = replicationModel;
 
 	return modifyTask;
 }
