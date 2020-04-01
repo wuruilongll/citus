@@ -317,10 +317,20 @@ if ( $conninfo )
 
 
     print $out "\n";
-    print $out "s/dbname=$dbname/dbname=<db>/g\n";
-    print $out "s/$user/<user>/g\n";
-    print $out "s/$host/<host>/g\n";
+    print $out "s/\\bdbname=regression\\b/dbname=<db>/g\n";
+    print $out "s/\\bdbname=$dbname\\b/dbname=<db>/g\n";
+    print $out "s/\\b$user\\b/<user>/g\n";
+    print $out "s/\\bpostgres\\b/<user>/g\n";
+    print $out "s/\\blocalhost\\b/<host>/g\n";
+    print $out "s/\\b$host\\b/<host>/g\n";
+    print $out "s/\\b576[0-9][0-9]\\b/xxxxx/g\n";
     print $out "s/", substr("$masterPort", 0, length("$masterPort")-2), "[0-9][0-9]/xxxxx/g\n";
+
+    print $out "s/:'worker_2_host'/'<host>'/g\n";
+    print $out "s/:'worker_1_host'/'<host>'/g\n";
+    print $out "s/:public_worker_1_host/-/g\n";
+    print $out "s/:public_worker_2_host/-/g\n";
+    print $out "s/:master_host/-/g\n";
 
     my $worker1host = `psql "$conninfo" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
     my $worker1port = `psql "$conninfo" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
