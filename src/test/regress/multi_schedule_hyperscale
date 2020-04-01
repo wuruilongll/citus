@@ -19,7 +19,7 @@
 # remove / add node operations, we do not want any preexisting objects before
 # propagate_extension_commands
 # ---
-test: multi_test_helpers_shadow
+test: multi_test_helpers
 test: multi_test_catalog_views
 test: multi_name_resolution
 
@@ -28,8 +28,8 @@ test: multi_name_resolution
 # The following distributed tests depend on creating a partitioned table and
 # uploading data to it.
 # ----------
-test: multi_create_table_shadow
-test: multi_master_protocol multi_load_data_shadow multi_behavioral_analytics_create_table_shadow
+test: multi_create_table
+test: multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
 test: recursive_dml_with_different_planners_executors
 test: window_functions multi_insert_select_window
 
