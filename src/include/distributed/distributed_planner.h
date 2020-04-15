@@ -105,14 +105,6 @@ typedef struct FastPathRestrictionContext
 	bool distributionKeyHasParam;
 }FastPathRestrictionContext;
 
-typedef struct CitusLocalPlanRestrictionContext
-{
-	bool citusLocalQuery;
-
-	/* citus local table RTE list is set in distributed_planner hook */
-	bool isLocalReferenceJoin;
-} CitusLocalPlanRestrictionContext;
-
 typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
@@ -125,8 +117,6 @@ typedef struct PlannerRestrictionContext
 	 * Instead, we keep this struct to pass some extra information.
 	 */
 	FastPathRestrictionContext *fastPathRestrictionContext;
-
-	CitusLocalPlanRestrictionContext *citusLocalPlanRestrictionContext;
 
 	bool hasSemiJoin;
 	MemoryContext memoryContext;
@@ -221,7 +211,6 @@ extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index restrictionIndex, RangeTblEntry *rte);
 extern bool QueryIsNotSimpleSelect(Node *node);
-extern void UpdateTablesWithoutDistKeysWithShards(Query *query, List *rangeTableList);
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outerrel,
