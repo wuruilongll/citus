@@ -73,6 +73,7 @@
 #include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
+#include "utils/datum.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -3519,8 +3520,12 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 	Const *minConstant = (Const *) minNode;
 	Const *maxConstant = (Const *) maxNode;
 
-	minConstant->constvalue = shardInterval->minValue;
-	maxConstant->constvalue = shardInterval->maxValue;
+	minConstant->constvalue = datumCopy(shardInterval->minValue,
+										shardInterval->valueByVal,
+										shardInterval->valueTypeLen);
+	maxConstant->constvalue = datumCopy(shardInterval->maxValue,
+										shardInterval->valueByVal,
+										shardInterval->valueTypeLen);
 
 	minConstant->constisnull = false;
 	maxConstant->constisnull = false;
