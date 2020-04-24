@@ -2762,19 +2762,87 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 				 * COPY table TO PROGRAM / file is handled by wrapping the table
 				 * in a SELECT * FROM table and going through the result COPY logic.
 				 */
-				ColumnRef *allColumns = makeNode(ColumnRef);
 				SelectStmt *selectStmt = makeNode(SelectStmt);
-				ResTarget *selectTarget = makeNode(ResTarget);
 
+#if PG_VERSION_NUM >= PG_VERSION_12
+				List *targetList = NIL;
+				Relation distributedRelation = heap_openrv(copyStatement->relation,
+														   AccessShareLock);
+				TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
+				bool hasGeneratedColumns = false;
+
+				for (int i = 0; i < tupleDescriptor->natts; i++)
+				{
+					Form_pg_attribute attr = &tupleDescriptor->attrs[i];
+					if (attr->attisdropped)
+					{
+						continue;
+					}
+
+					if (attr->attgenerated)
+					{
+						hasGeneratedColumns = true;
+						break;
+					}
+				}
+
+				if (hasGeneratedColumns)
+				{
+					for (int i = 0; i < tupleDescriptor->natts; i++)
+					{
+						Form_pg_attribute attr = &tupleDescriptor->attrs[i];
+
+						if (attr->attisdropped || attr->attgenerated)
+						{
+							continue;
+						}
+
+						ColumnRef *column = makeNode(ColumnRef);
+						column->fields = list_make1(makeString(pstrdup(
+																   attr->attname.data)));
+						column->location = -1;
+
+						ResTarget *selectTarget = makeNode(ResTarget);
+						selectTarget->name = NULL;
+						selectTarget->indirection = NIL;
+						selectTarget->val = (Node *) column;
+						selectTarget->location = -1;
+
+						targetList = lappend(targetList, selectTarget);
+					}
+
+					selectStmt->targetList = targetList;
+				}
+				else
+				{
+					ColumnRef *allColumns = makeNode(ColumnRef);
+					allColumns->fields = list_make1(makeNode(A_Star));
+					allColumns->location = -1;
+
+					ResTarget *selectTarget = makeNode(ResTarget);
+					selectTarget->name = NULL;
+					selectTarget->indirection = NIL;
+					selectTarget->val = (Node *) allColumns;
+					selectTarget->location = -1;
+
+					selectStmt->targetList = list_make1(selectTarget);
+				}
+
+				heap_close(distributedRelation, NoLock);
+#else
+				ColumnRef *allColumns = makeNode(ColumnRef);
 				allColumns->fields = list_make1(makeNode(A_Star));
 				allColumns->location = -1;
 
+				ResTarget *selectTarget = makeNode(ResTarget);
 				selectTarget->name = NULL;
 				selectTarget->indirection = NIL;
 				selectTarget->val = (Node *) allColumns;
 				selectTarget->location = -1;
 
 				selectStmt->targetList = list_make1(selectTarget);
+#endif
+
 				selectStmt->fromClause = list_make1(copyObject(copyStatement->relation));
 
 				/* replace original statement */
@@ -3061,6 +3129,10 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 		{
 			if (TupleDescAttr(tupDesc, i)->attisdropped)
 				continue;
+#if PG_VERSION_NUM >= PG_VERSION_12
+			if (TupleDescAttr(tupDesc, i)->attgenerated)
+				continue;
+#endif
 			attnums = lappend_int(attnums, i + 1);
 		}
 	}
@@ -3085,6 +3157,14 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 					continue;
 				if (namestrcmp(&(att->attname), name) == 0)
 				{
+#if PG_VERSION_NUM >= PG_VERSION_12
+					if (att->attgenerated)
+						ereport(ERROR,
+								(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+								 errmsg("column \"%s\" is a generated column",
+										name),
+								 errdetail("Generated columns cannot be used in COPY.")));
+#endif
 					attnum = att->attnum;
 					break;
 				}
